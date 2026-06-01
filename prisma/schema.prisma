@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  plan      String   @default("free")
+  role      String   @default("user")
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflows     Workflow[]
+  connectedApps ConnectedApp[]
+  agents        Agent[]
+  runLogs       RunLog[]
+  tables        Table[]
+  forms         Form[]
+  chatbots      Chatbot[]
+}
+
+model Workflow {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  status    String   @default("draft")
+  trigger   String
+  actions   String
+  runs      Int      @default(0)
+  lastRun   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runLogs RunLog[]
+
+  @@index([userId])
+}
+
+model ConnectedApp {
+  id          String   @id @default(cuid())
+  userId      String
+  appId       String
+  name        String
+  icon        String
+  color       String
+  connectedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, appId])
+  @@index([userId])
+}
+
+model Agent {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  description     String   @default("")
+  status          String   @default("active")
+  tasksCompleted  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RunLog {
+  id           String   @id @default(cuid())
+  userId       String
+  workflowId   String
+  workflowName String
+  status       String
+  duration     String
+  steps        String   @default("[]")
+  error        String?
+  createdAt    DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workflowId])
+}
+
+model Table {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  rows      Int      @default(0)
+  columns   String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Form {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  fields      Int      @default(3)
+  submissions Int      @default(0)
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Chatbot {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  channel       String   @default("Web")
+  conversations Int      @default(0)
+  status        String   @default("draft")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Integration {
+  id       String  @id
+  name     String
+  icon     String
+  color    String
+  category String
+  enabled  Boolean @default(true)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  userId    String?
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model PlatformSetting {
+  key   String @id
+  value String
+}

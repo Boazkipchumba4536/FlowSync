@@ -1,22 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Zap, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROUTES } from "@/lib/routes";
-import { getSession } from "@/lib/auth";
-import { ADMIN_EMAIL } from "@/lib/auth";
+import { ADMIN_EMAIL } from "@/lib/types";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn, demoLogin } = useAuth();
+  const { signIn, demoLogin, session } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (session) {
+      router.push(session.role === "admin" ? ROUTES.admin : ROUTES.dashboard);
+    }
+  }, [session, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +32,7 @@ export default function LoginPage() {
     if (err) {
       setError(err);
     } else {
-      const session = getSession();
-      router.push(session?.role === "admin" ? ROUTES.admin : ROUTES.dashboard);
+      router.push(email.toLowerCase() === "admin@flowsync.io" ? ROUTES.admin : ROUTES.dashboard);
     }
   };
 

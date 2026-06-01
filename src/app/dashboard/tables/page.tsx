@@ -4,56 +4,33 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/auth/AuthGuard";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import EmptyState from "@/components/ui/EmptyState";
-import { useAuth } from "@/context/AuthContext";
-import { getTables, saveTables, type Table } from "@/lib/store";
-import { Table2, Plus } from "lucide-react";
+import { tableApi } from "@/lib/services";
+import type { TableDTO } from "@/lib/types";
+import { Table2 } from "lucide-react";
 
 export default function TablesPage() {
-  return (
-    <AuthGuard>
-      <DashboardLayout>
-        <TablesContent />
-      </DashboardLayout>
-    </AuthGuard>
-  );
+  return <AuthGuard><DashboardLayout><TablesContent /></DashboardLayout></AuthGuard>;
 }
 
 function TablesContent() {
-  const { session } = useAuth();
-  const [tables, setTables] = useState<Table[]>([]);
+  const [tables, setTables] = useState<TableDTO[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (session) setTables(getTables(session.userId));
-  }, [session]);
+  const load = () => tableApi.list().then(({ tables: t }) => setTables(t)).finally(() => setLoading(false));
+  useEffect(() => { load(); }, []);
 
-  const createTable = () => {
-    if (!session) return;
-    const table: Table = {
-      id: `tbl-${Date.now()}`,
-      name: `Table ${tables.length + 1}`,
-      rows: 0,
-      columns: ["Name", "Status", "Updated"],
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = [...tables, table];
-    setTables(updated);
-    saveTables(session.userId, updated);
-  };
+  const create = async () => { await tableApi.create(); load(); };
+
+  if (loading) return <div className="flex h-48 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
   return (
     <div>
       <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Tables</h1>
-          <p className="mt-1 text-sm text-white/50">Store and sync data for your workflows</p>
-        </div>
-        <button type="button" onClick={createTable} className="flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white">
-          <Plus className="h-4 w-4" /> New table
-        </button>
+        <div><h1 className="font-display text-2xl font-bold">Tables</h1><p className="mt-1 text-sm text-white/50">Store and sync data for workflows</p></div>
+        <button type="button" onClick={create} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white">+ New table</button>
       </div>
-
       {tables.length === 0 ? (
-        <EmptyState icon={Table2} title="No tables yet" description="Create spreadsheet-like tables that your workflows can read and update." actionLabel="Create table" onAction={createTable} />
+        <EmptyState icon={Table2} title="No tables yet" description="Create spreadsheet-like tables your workflows can read and update." actionLabel="Create table" onAction={create} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tables.map((t) => (
@@ -61,7 +38,6 @@ function TablesContent() {
               <Table2 className="h-6 w-6 text-blue-400" />
               <h3 className="mt-3 font-display font-semibold">{t.name}</h3>
               <p className="mt-1 text-xs text-white/40">{t.columns.length} columns · {t.rows} rows</p>
-              <p className="mt-2 text-[10px] text-white/30">Updated {new Date(t.updatedAt).toLocaleDateString()}</p>
             </div>
           ))}
         </div>

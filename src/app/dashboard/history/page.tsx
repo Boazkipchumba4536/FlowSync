@@ -4,49 +4,35 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/auth/AuthGuard";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import EmptyState from "@/components/ui/EmptyState";
-import { useAuth } from "@/context/AuthContext";
-import { getHistory, type RunLog } from "@/lib/store";
+import RunStepDiagnostics from "@/components/workflows/RunStepDiagnostics";
+import { historyApi } from "@/lib/services";
+import type { RunLogDTO } from "@/lib/types";
 import { ROUTES } from "@/lib/routes";
-import { CheckCircle2, XCircle, Loader2, History } from "lucide-react";
+import { CheckCircle2, XCircle, History, ChevronDown, ChevronRight } from "lucide-react";
 
 export default function HistoryPage() {
   return (
-    <AuthGuard>
-      <DashboardLayout>
-        <HistoryContent />
-      </DashboardLayout>
-    </AuthGuard>
+    <AuthGuard><DashboardLayout><HistoryContent /></DashboardLayout></AuthGuard>
   );
 }
 
 function HistoryContent() {
-  const { session } = useAuth();
-  const [logs, setLogs] = useState<RunLog[]>([]);
+  const [logs, setLogs] = useState<RunLogDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (session) setLogs(getHistory(session.userId));
-  }, [session]);
+    historyApi.list().then(({ logs: l }) => setLogs(l)).finally(() => setLoading(false));
+  }, []);
 
-  const statusIcon = (status: RunLog["status"]) => {
-    switch (status) {
-      case "success": return <CheckCircle2 className="h-4 w-4 text-green-400" />;
-      case "error": return <XCircle className="h-4 w-4 text-red-400" />;
-      default: return <Loader2 className="h-4 w-4 animate-spin text-accent" />;
-    }
-  };
+  if (loading) return <div className="flex h-48 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
   if (logs.length === 0) {
     return (
       <div>
         <h1 className="font-display text-2xl font-bold">Run history</h1>
         <div className="mt-8">
-          <EmptyState
-            icon={History}
-            title="No runs yet"
-            description="When your workflows execute, every run is logged here for full visibility and auditing."
-            actionLabel="Create a workflow"
-            actionHref={ROUTES.dashboardWorkflowNew}
-          />
+          <EmptyState icon={History} title="No runs yet" description="When your workflows execute, every run is logged here with step-level diagnostics." actionLabel="Create a workflow" actionHref={ROUTES.dashboardWorkflowNew} />
         </div>
       </div>
     );
@@ -56,28 +42,53 @@ function HistoryContent() {
     <div>
       <div className="mb-8">
         <h1 className="font-display text-2xl font-bold">Run history</h1>
-        <p className="mt-1 text-sm text-white/50">{logs.length} executions logged</p>
+        <p className="mt-1 text-sm text-white/50">{logs.length} executions logged · expand any run for step diagnostics</p>
       </div>
-
-      <div className="overflow-hidden rounded-xl border border-white/10">
-        <div className="grid grid-cols-4 gap-4 border-b border-white/10 bg-white/5 px-4 py-3 text-xs font-medium uppercase tracking-wider text-white/40">
-          <span className="col-span-2">Workflow</span>
-          <span>Status</span>
-          <span>Duration</span>
-        </div>
-        {logs.map((log) => (
-          <div key={log.id} className="grid grid-cols-4 gap-4 border-b border-white/5 px-4 py-3 last:border-0">
-            <div className="col-span-2">
-              <p className="text-sm text-white">{log.workflowName}</p>
-              <p className="text-xs text-white/40">{new Date(log.timestamp).toLocaleString()}</p>
+      <div className="space-y-3">
+        {logs.map((log) => {
+          const expanded = expandedId === log.id;
+          const retried = log.steps?.some((s) => (s.attempts ?? 1) > 1);
+          return (
+            <div key={log.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => setExpandedId(expanded ? null : log.id)}
+                className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-white/[0.02]"
+              >
+                {expanded ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-white/40" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-white/40" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-white">{log.workflowName}</p>
+                  <p className="text-xs text-white/40">{new Date(log.timestamp).toLocaleString()}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {retried && (
+                    <span className="hidden rounded-full bg-yellow-500/10 px-2 py-0.5 text-[10px] uppercase text-yellow-400 sm:inline">
+                      Retries
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {log.status === "success" ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-400" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-400" />
+                    )}
+                    <span className="text-sm capitalize text-white/70">{log.status}</span>
+                  </div>
+                  <span className="text-sm text-white/50">{log.duration}</span>
+                </div>
+              </button>
+              {expanded && log.steps && log.steps.length > 0 && (
+                <div className="border-t border-white/10 p-4">
+                  <RunStepDiagnostics steps={log.steps} error={log.error} title="Step-by-step execution" />
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              {statusIcon(log.status)}
-              <span className="text-sm capitalize text-white/70">{log.status}</span>
-            </div>
-            <span className="text-sm text-white/50">{log.duration}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

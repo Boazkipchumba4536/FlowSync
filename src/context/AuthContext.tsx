@@ -2,81 +2,70 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import {
-  type Session,
-  getSession,
-  signIn as authSignIn,
-  signUp as authSignUp,
-  signOut as authSignOut,
-  demoSignIn,
-  ensurePlatformAccounts,
-  DEMO_EMAIL,
-} from "@/lib/auth";
-import { seedDemoUserData, addAuditLog } from "@/lib/store";
+import { authApi } from "@/lib/services";
+import { ApiError } from "@/lib/api-client";
+import type { SessionUser } from "@/lib/types";
 import { ROUTES } from "@/lib/routes";
 
 interface AuthContextValue {
-  session: Session | null;
+  session: SessionUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (name: string, email: string, password: string) => Promise<string | null>;
-  signOut: () => void;
-  demoLogin: () => void;
-  refreshSession: () => void;
+  signOut: () => Promise<void>;
+  demoLogin: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const refreshSession = useCallback(() => {
-    setSession(getSession());
+  const refreshSession = useCallback(async () => {
+    try {
+      const { user } = await authApi.me();
+      setSession(user);
+    } catch {
+      setSession(null);
+    }
   }, []);
 
   useEffect(() => {
-    ensurePlatformAccounts();
-    setSession(getSession());
-    setLoading(false);
-  }, []);
+    refreshSession().finally(() => setLoading(false));
+  }, [refreshSession]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const result = authSignIn(email, password);
-    if (result.ok) {
-      if (email.toLowerCase() === DEMO_EMAIL) {
-        seedDemoUserData(result.session.userId);
-      }
-      addAuditLog("login", `User signed in: ${email}`, result.session.userId);
-      setSession(getSession());
+    try {
+      const { user } = await authApi.login(email, password);
+      setSession(user);
       return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : "Sign in failed";
     }
-    return result.error;
   }, []);
 
   const signUp = useCallback(async (name: string, email: string, password: string) => {
-    const result = authSignUp(name, email, password);
-    if (result.ok) {
-      addAuditLog("signup", `New user registered: ${email}`, result.session.userId);
-      setSession(getSession());
+    try {
+      const { user } = await authApi.signup(name, email, password);
+      setSession(user);
       return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : "Sign up failed";
     }
-    return result.error;
   }, []);
 
-  const signOut = useCallback(() => {
-    if (session) addAuditLog("logout", `User signed out: ${session.email}`, session.userId);
-    authSignOut();
+  const signOut = useCallback(async () => {
+    await authApi.logout();
     setSession(null);
     router.push(ROUTES.home);
-  }, [router, session]);
+  }, [router]);
 
-  const demoLogin = useCallback(() => {
-    const s = demoSignIn();
-    seedDemoUserData(s.userId);
-    addAuditLog("login", "Demo account accessed", s.userId);
-    setSession(getSession());
+  const demoLogin = useCallback(async () => {
+    const { user } = await authApi.demo();
+    setSession(user);
     router.push(ROUTES.dashboard);
   }, [router]);
 
