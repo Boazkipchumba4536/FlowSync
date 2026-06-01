@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  ::selection {
+    background-color: rgba(255, 90, 31, 0.3);
+    color: white;
+  }
+}
+
+@layer utilities {
+  .cta-glow {
+    box-shadow: 0 0 20px rgba(255, 90, 31, 0.3);
+  }
+
+  .cta-glow:hover {
+    box-shadow: 0 0 30px rgba(255, 90, 31, 0.5);
+  }
+}
+
+/* Hide default cursor on desktop when custom cursor is active */
+@media (pointer: fine) and (min-width: 1024px) {
+  body {
+    cursor: none;
+  }
+
+  a,
+  button {
+    cursor: none;
+  }
+}
